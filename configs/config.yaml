@@ -1,0 +1,48 @@
+# PrismRisk — single source of truth. Week numbers follow the Kaggle competition
+# (WEEK_NUM 0..91). Chronological split, never shuffled.
+splits:
+  train_weeks: [0, 59]     # Jan 2019 – Feb 2020 (pre-COVID baseline)
+  calib_weeks: [60, 69]    # Mar 2020 – May 2020 (isotonic calibration + conformal fit)
+  val_weeks:   [70, 79]    # May 2020 – Jul 2020 (Optuna model selection)
+  test_weeks:  [80, 91]    # Jul 2020 – Oct 2020 (locked out-of-time evaluation)
+
+economics:
+  interest_margin: 0.14      # net interest margin earned on a repaid loan
+  lgd: 0.65                  # loss-given-default on defaulted principal
+  manual_review_cost: 12.0   # $ per grey-zone application routed to an underwriter
+
+conformal:
+  alpha: 0.10                # 1 - alpha = 90% coverage target
+  confidence_level: 0.90
+
+governance:
+  monotone_plus:             # +1: higher value must not decrease predicted risk
+    - max_dpd_bureau
+    - max_dpd_prev
+    - annuity_to_income
+    - credamount_to_income
+  monotone_minus:            # -1: higher value must not increase predicted risk
+    - maininc_clean
+  immutable_features:        # locked in DiCE counterfactual recourse
+    - age_years
+    - max_dpd_bureau
+    - max_dpd_prev
+    - bureau_loan_count
+    - prev_app_count
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  id_col: case_id
+  week_col: WEEK_NUM
+  target: target
+  date_decision: date_decision
+  null_col_threshold: 0.95   # drop columns with >95% nulls (fit on TRAIN weeks only)
+
+profit:
+  cutoff_start: 0.01
+  cutoff_stop: 0.25
+  cutoff_step: 0.01          # expects >=25 steps; tau_star selected on CALIB weeks
+
+runtime:
+  random_seed: 42

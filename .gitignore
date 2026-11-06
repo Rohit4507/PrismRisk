@@ -218,3 +218,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- PrismRisk project ---
+data/raw/
+data/raw_synth/
+data/processed/*
+!data/processed/sample_500.parquet   # committed: tiny fixture for tests/HF Space
+mlruns/
+mlflow.db
+models/*.joblib
+!models/champion_bundle.joblib       # committed for the HF Space / API
+reports/*.html
+reports/psi_weekly.csv
+.venv/
+.env

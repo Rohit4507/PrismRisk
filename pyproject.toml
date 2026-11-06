@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prismrisk"
+version = "0.1.0"
+description = "Temporal credit decision & MLOps system: monotone LightGBM, isotonic calibration, conformal grey-zone triage, DiCE recourse, drift monitoring."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Rohit Singh Rajput" }]
+dependencies = [
+    "polars==2.1.0",
+    "duckdb==2.0.0",
+    "pyarrow==26.0.1",
+    "lightgbm==4.7.0",
+    "xgboost==3.2.0",  # 3.3+ requires Python >=3.12; pin 3.2.0 for Python 3.11
+    "scikit-learn==1.9.1",
+    "optuna==5.0.0",
+    "mlflow==3.18.0",
+    "mapie==1.6.0",
+    "dice-ml==0.12",
+    "shap==0.51.0",     # 0.52+ requires Python >=3.12; pin 0.51.0 for Python 3.11
+    "evidently==0.7.23",
+    "fastapi==0.162.0",
+    "uvicorn[standard]==0.54.0",
+    "streamlit==1.67.0",
+    "pydantic==2.14.3",
+    "pyyaml==6.0.3",
+    "joblib==1.6.0",
+    "matplotlib==3.11.2",
+    "seaborn==0.13.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.2.0",
+    "ruff==0.17.4",
+    "locust==2.47.0",
+    "httpx==0.28.1",
+    "ipykernel==7.4.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "PL"]
+ignore = ["PLR0913", "PLR2004", "SIM108", "B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::FutureWarning", "ignore::UserWarning"]
