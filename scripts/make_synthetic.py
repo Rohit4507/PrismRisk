@@ -1,10 +1,13 @@
-"""Generate a tiny SYNTHETIC stand-in for the Kaggle tables.
+"""Generate a SYNTHETIC stand-in for the Home Credit stability dataset.
 
-Used only for local smoke runs and tests — never commit its output as if it
-were real competition data. Column names mimic the real schema where known;
-after you download the actual dataset, reconcile in `prismrisk/features.py`.
+Two regimes are baked in so the pipeline's drift story is visible:
+  * WEEK_NUM 0-59  : steady-state baseline
+  * WEEK_NUM 60-91 : "COVID shock" — default odds shift, channel mix shifts online
 
-Usage:  python scripts/make_synthetic.py --rows 2000 --out data/raw_synth
+Used for smoke runs, CI, and the HF Space demo fixture. Never committed as if it
+were real competition data (config-driven: real Kaggle parquet plugs in unchanged).
+
+Usage:  python scripts/make_synthetic.py --rows 300000 --out data/raw_synth
 """
 
 from __future__ import annotations
@@ -19,16 +22,33 @@ import polars as pl
 def generate(rows: int = 2000, seed: int = 42) -> dict[str, pl.DataFrame]:
     rng = np.random.default_rng(seed)
     case_id = np.arange(1, rows + 1, dtype=np.int64)
-    week = np.arange(rows) % 92  # covers WEEK_NUM 0..91 cyclically
+    week = np.arange(rows) % 92  # 0..91 cyclically — covers full comp span
+    covid = (week >= 60).astype(np.float64)
     base_date = np.datetime64("2019-01-01") + (week * 7).astype("timedelta64[D]")
 
-    income = rng.lognormal(mean=11.2, sigma=0.6, size=rows)  # ~ KZT-ish scale
-    loan = rng.lognormal(mean=12.5, sigma=0.7, size=rows)
-    annuity = loan / rng.uniform(6, 24, size=rows)
-    dpd_bureau = rng.gamma(shape=0.6, scale=15.0, size=rows)  # past delinquencies
+    # --- correlated applicant economics -----------------------------------
+    income = rng.lognormal(mean=11.2, sigma=0.6, size=rows)
+    loan = rng.lognormal(mean=10.4, sigma=0.7, size=rows)  # ~ $33k mean retail loan
+    annuity = loan / rng.uniform(6.0, 24.0, size=rows)
+    # mixture: 55% clean payers (small gamma), 45% stressed (heavy tail)
+    stressed = rng.uniform(size=rows) >= 0.55
+    dpd = np.where(stressed, rng.gamma(2.0, 16.0, size=rows), rng.gamma(1.0, 2.0, size=rows))
+    # channel mix shifts online after the shock
+    p_online = np.where(covid > 0, 0.45, 0.30)
+    channel = np.where(rng.uniform(size=rows) < p_online, "online", "branch")
+    emp_band = rng.choice(["junior", "mid", "senior"], size=rows, p=[0.45, 0.4, 0.15])
 
-    # target correlated with delinquency (not for ML quality — just for smoke runs)
-    p = np.clip(0.04 + 0.009 * dpd_bureau, 0.02, 0.85)
+    ratio = annuity / (income + 1.0)
+    z = (
+        -4.80
+        + 0.055 * dpd
+        + 1.15 * np.log1p(ratio * 10.0)
+        - 0.90 * np.log1p(income / 1e5)
+        + 0.55 * covid            # regime shift: odds level
+        + 0.030 * dpd * covid     # interaction: delinquency hurts MORE post-shock
+        + rng.normal(0.0, 0.35, size=rows)
+    )
+    p = 1.0 / (1.0 + np.exp(-z))
     target = (rng.uniform(size=rows) < p).astype(np.int64)
 
     base = pl.DataFrame(
@@ -38,6 +58,8 @@ def generate(rows: int = 2000, seed: int = 42) -> dict[str, pl.DataFrame]:
             "WEEK_NUM": week.astype(np.int64),
             "MONTH": (base_date.astype("datetime64[M]").astype(np.int64) % 12) + 1,
             "target": target,
+            "channel": channel,
+            "emp_band": emp_band,
         }
     )
     static0 = pl.DataFrame(
@@ -45,7 +67,7 @@ def generate(rows: int = 2000, seed: int = 42) -> dict[str, pl.DataFrame]:
             "case_id": case_id,
             "credamount_770A": loan.astype(np.float32),
             "annuity_780A": annuity.astype(np.float32),
-            "static_past_dpd_001P": dpd_bureau.astype(np.float32),
+            "static_past_dpd_001P": dpd.astype(np.float32),
             "static_limit_002A": (loan * rng.uniform(0.3, 1.5, size=rows)).astype(np.float32),
             "static_signdate_001D": base_date - rng.integers(30, 400, size=rows).astype("timedelta64[D]"),
         }
@@ -75,8 +97,8 @@ def generate(rows: int = 2000, seed: int = 42) -> dict[str, pl.DataFrame]:
         {
             "case_id": np.repeat(case_id, 2),
             "num_group1": np.tile([0, 1], rows),
-            "dpd_total_001P": np.concatenate([dpd_bureau, dpd_bureau * 0.5]).astype(np.float32),
-            "overdue_total_002A": (np.concatenate([dpd_bureau, dpd_bureau * 0.5]) * 37.0).astype(np.float32),
+            "dpd_total_001P": np.concatenate([dpd, dpd * 0.5]).astype(np.float32),
+            "overdue_total_002A": (np.concatenate([dpd, dpd * 0.5]) * 37.0).astype(np.float32),
             "bureau_origamount_003A": np.concatenate([loan * 0.6, loan * 0.4]).astype(np.float32),
         }
     )

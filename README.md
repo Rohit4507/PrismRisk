@@ -21,10 +21,13 @@ adverse-action notices, weekly PSI drift monitoring.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                       # 22 tests, synthetic data — no Kaggle download needed
+pytest -q                       # 23 tests, synthetic data — no Kaggle download needed
 python scripts/make_synthetic.py --rows 2000   # synthetic smoke stand-in
 ```
 
 ## Data
-Not committed (Kaggle competition rules). Download `home-credit-credit-risk-model-stability`
-CSVs into `data/raw/`, convert to Parquet, then `python -m prismrisk.features --sample`.
+Not committed (competition rules). Dev fixture: `python scripts/make_synthetic.py --rows 300000`
+(synthetic ~$33k loans, pre/post Week-60 default shock 12% → 23%). For **real metrics**:
+(A) UCI "Default of Credit Card Clients", 30k rows, clean license, commit-ready mirrors on GitHub; or
+(B) Kaggle `home-credit-credit-risk-model-stability` CSVs (login + 1-time rules click) →
+`python -m prismrisk.features --sample`. See docs/IMPLEMENTATION_PLAN.md §0.

@@ -4,8 +4,10 @@ Design notes
 ------------
 * Kaggle ships CSVs; we convert once to Parquet (`scripts/` / README) and read
   lazily with Polars / DuckDB (out-of-core friendly).
-* Depth-1 tables are aggregated to one row per case_id FIRST, then 1:1 joined
-  onto the base table. Duplicates are a hard error (never silently duplicated rows).
+* Depth-0 tables (static_0, static_cb_0, primary-applicant person_1) are 1 row per
+  case_id and joined DIRECTLY (level columns like credamount_770A survive).
+* Depth-1 tables (applprev_1, credit_bureau_a_1) are aggregated to one row per case_id
+  FIRST, then 1:1 joined onto the base table. Duplicates are a hard error (never silently duplicated rows).
 * Raw `*D` dates leak temporal drift; everything is converted to
   `(date_decision - col_D).dt.total_days()` and raw date columns are dropped.
 * Column names follow the competition schema. They are **verified at runtime**
@@ -170,6 +172,72 @@ def write_sample(df: pl.DataFrame, path: Path, n: int = 500, seed: int = 42) -> 
     return path
 
 
+
+def _load_tables(raw_dir: Path, cfg) -> tuple[pl.DataFrame, list[pl.DataFrame]]:
+    """Read raw Parquet shards; depth-0 direct-joined, depth-1 aggregated.
+
+    Returns (base_frame, [part_parts...]) where each part is 1 row per case_id.
+    """
+
+    def read_sharded(pattern: str) -> pl.DataFrame | None:
+        files = sorted(raw_dir.glob(pattern))
+        if not files:
+            return None
+        frames = [pl.read_parquet(p) for p in files]
+        return frames[0] if len(frames) == 1 else pl.concat(frames, how="vertical_relaxed")
+
+    def check_unique(frame: pl.DataFrame, name: str) -> pl.DataFrame:
+        dupes = int(frame["case_id"].is_duplicated().sum())
+        if dupes:  # static tables are 1 row/case; warn loudly, never explode rows
+            print(f"[features] WARNING: {name} has {dupes} duplicated case_id; keeping first occurrence")
+            frame = frame.unique(subset=["case_id"], keep="first", maintain_order=True)
+        return frame
+
+    base = pl.read_parquet(raw_dir / "train_base.parquet")
+
+    static0 = read_sharded("train_static_0_*.parquet")
+    if static0 is None:
+        raise FileNotFoundError(f"no train_static_0_*.parquet under {raw_dir}")
+    parts: list[pl.DataFrame] = [check_unique(static0, "train_static_0")]
+
+    static_cb = read_sharded("train_static_cb_0*.parquet")  # optional
+    if static_cb is not None:
+        parts.append(check_unique(static_cb, "train_static_cb_0"))
+
+    person = pl.read_parquet(raw_dir / "train_person_1.parquet")
+    if "num_group1" in person.columns:  # primary applicant only
+        person = person.filter(pl.col("num_group1") == 0)
+    parts.append(check_unique(person, "train_person_1 (num_group1==0)"))
+
+    bureau = read_sharded("train_credit_bureau_a_1_*.parquet")
+    if bureau is None:
+        raise FileNotFoundError(f"no train_credit_bureau_a_1_*.parquet under {raw_dir}")
+    bureau_num = [c for c in bureau.columns if c not in {cfg.id_col, "num_group1"} and bureau[c].dtype.is_numeric()]
+    parts.append(
+        aggregate_depth1(
+            bureau.lazy(), case_id=cfg.id_col, count_name="bureau_loan_count",
+            numeric_cols=bureau_num,
+        ).collect()
+    )
+
+    applprev_files = sorted(raw_dir.glob("train_applprev_1_*.parquet"))
+    if applprev_files:
+        applprev = pl.concat([pl.scan_parquet(p) for p in applprev_files], how="vertical_relaxed")
+        appl_schema = applprev.collect_schema()
+        appl_num = [
+            name
+            for name in appl_schema.names()
+            if name not in {cfg.id_col, "num_group1"} and appl_schema[name].is_numeric()
+        ]
+        parts.append(
+            aggregate_depth1(
+                applprev, case_id=cfg.id_col, count_name="app_count",
+                numeric_cols=appl_num, prefix="prev_",
+            ).collect()
+        )
+    return base, parts
+
+
 # ---------------------------------------------------------------- orchestration
 def build_features(raw_dir: Path, out_path: Path, config=None) -> Path:
     """Build the modelling frame from raw competition Parquet files."""
@@ -188,50 +256,7 @@ def build_features(raw_dir: Path, out_path: Path, config=None) -> Path:
             "Download the competition data from Kaggle first (see docs/IMPLEMENTATION_PLAN.md §3)."
         )
 
-    base = pl.read_parquet(raw_dir / "train_base.parquet")
-
-    static0 = pl.read_parquet(raw_dir / "train_static_0_1.parquet")
-    stat_extra = sorted(raw_dir.glob("train_static_0_*.parquet"))[1:]
-    if stat_extra:
-        static0 = pl.concat([static0, *(pl.read_parquet(p) for p in stat_extra)], how="vertical_relaxed")
-
-    person = pl.read_parquet(raw_dir / "train_person_1.parquet")
-    if "num_group1" in person.columns:  # keep primary applicant only
-        person = person.filter(pl.col("num_group1") == 0)
-    bureau = pl.read_parquet(raw_dir / "train_credit_bureau_a_1_1.parquet")
-    bureau_extra = sorted(raw_dir.glob("train_credit_bureau_a_1_*.parquet"))[1:]
-    if bureau_extra:
-        bureau = pl.concat([bureau, *(pl.read_parquet(p) for p in bureau_extra)], how="vertical_relaxed")
-    applprev_files = sorted(raw_dir.glob("train_applprev_1_*.parquet"))
-    applprev = (
-        pl.concat([pl.scan_parquet(p) for p in applprev_files], how="vertical_relaxed")
-        if applprev_files
-        else None
-    )
-
-    static_num = [c for c in static0.columns if c not in {cfg.id_col, "WEEK_NUM"} and static0[c].dtype.is_numeric()]
-    bureau_num = [c for c in bureau.columns if c not in {cfg.id_col, "num_group1"} and bureau[c].dtype.is_numeric()]
-    person_num = [c for c in person.columns if c not in {cfg.id_col, "num_group1"} and person[c].dtype.is_numeric()]
-
-    parts = [
-        aggregate_depth1(static0.lazy(), case_id=cfg.id_col, count_name="static_rows",
-                         numeric_cols=static_num).collect(),
-        aggregate_depth1(bureau.lazy(), case_id=cfg.id_col, count_name="bureau_loan_count",
-                         numeric_cols=bureau_num).collect(),
-        aggregate_depth1(person.lazy(), case_id=cfg.id_col, count_name="person_rows",
-                         numeric_cols=person_num).collect(),
-    ]
-    if applprev is not None:
-        appl_schema = applprev.collect_schema()
-        appl_num = [
-            name
-            for name in appl_schema.names()
-            if name not in {cfg.id_col, "num_group1"} and appl_schema[name].is_numeric()
-        ]
-        parts.append(
-            aggregate_depth1(applprev, case_id=cfg.id_col, count_name="app_count",
-                             numeric_cols=appl_num, prefix="prev_").collect()
-        )
+    base, parts = _load_tables(raw_dir, cfg)
 
     df = one_row_per_case(base, parts)
 
