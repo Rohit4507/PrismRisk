@@ -14,8 +14,11 @@ if ! command -v kaggle >/dev/null 2>&1; then
 fi
 
 kaggle competitions download -c home-credit-credit-risk-model-stability -p data
-unzip -q -o data/home-credit-credit-risk-model-stability.zip -d data
-rm data/home-credit-credit-risk-model-stability.zip
+
+ZIP=data/home-credit-credit-risk-model-stability.zip
+if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+"$PY" -m zipfile -e "$ZIP" data/   # portable extract: no `unzip` needed (Windows Git Bash OK)
+rm "$ZIP"
 
 echo "Data ready under data/csv_files/ (train/ and test/, ~4 GB)"
 echo "Next:  python scripts/prepare_raw.py   # -> data/raw/*.parquet"

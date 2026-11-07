@@ -45,6 +45,37 @@ test folder is unused.
    python -m prismrisk.features  # -> data/processed/features.parquet
    ```
 
+   `make data` does steps 3+4 equivalents (download + prepare) in one go on machines with `make`.
+
+### Windows without bash / make (PowerShell)
+
+```powershell
+pip install kaggle
+kaggle competitions download -c home-credit-credit-risk-model-stability -p data
+python -m zipfile -e data\home-credit-credit-risk-model-stability.zip data\
+Remove-Item data\home-credit-credit-risk-model-stability.zip
+python scripts/prepare_raw.py
+python -m prismrisk.features
+```
+
+### Manual browser download (slow internet / CLI trouble)
+
+Competition page → **Data** tab → **Download All** (needs the same accepted rules) →
+move the zip into `data/` → extract with any archiver → you should get `data/csv_files/train/`
+and `data/csv_files/test/` → `python scripts/prepare_raw.py`.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `403` / `401` on download | Rules not accepted / bad token | Accept rules on the competition page; re-create `kaggle.json`; on Linux/macOS `chmod 600 ~/.kaggle/kaggle.json` |
+| `404` | Wrong competition slug | Use exactly `home-credit-credit-risk-model-stability` |
+| Asked for phone verification | Kaggle anti-abuse on some comps | Verify once in Kaggle settings — unavoidable |
+| `make: command not found` | Windows default | Use the PowerShell block above |
+| Kaggle CLI "not found" after pip install | Scripts dir not on PATH | `python -m kaggle competitions download ...` or re-open terminal |
+| Out of memory in features/train | 1.5M rows × wide tables | Close other apps; 16 GB RAM recommended; use `python scripts/make_synthetic.py --rows 50000 --out data/raw_synth` to warm up first |
+| Slow download (India) | ~4 GB over residential bandwidth | Use the browser download overnight; resume with the Kaggle CLI if interrupted |
+
 ## If you don't want to touch Kaggle
 
 - **A. UCI "Default of Credit Card Clients"** (30k rows, license reuse with
