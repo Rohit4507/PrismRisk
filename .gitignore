@@ -220,16 +220,19 @@ __marimo__/
 .streamlit/secrets.toml
 
 # --- PrismRisk project ---
-data/csv_files/          # Kaggle download unpacks here (never committed, see data/README.md)
+# Kaggle download unpacks here (never committed, see data/README.md)
+data/csv_files/
 data/*.zip
 data/raw/
 data/raw_synth/
 data/processed/*
-!data/processed/sample_500.parquet   # committed: tiny fixture for tests/HF Space
+# committed: tiny synthetic fixture for tests/HF Space
+!data/processed/sample_500.parquet
 mlruns/
 mlflow.db
 models/*.joblib
-!models/champion_bundle.joblib       # committed for the HF Space / API
+# committed for the HF Space / API
+!models/champion_bundle.joblib
 reports/*.html
 reports/psi_weekly.csv
 .venv/

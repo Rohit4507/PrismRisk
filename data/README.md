@@ -59,6 +59,6 @@ test folder is unused.
 ## What not to do
 
 - Do not `git add data/` — the Kaggle license forbids redistribution.
-- Do not commit `features.parquet`, `sample_500.parquet` is the only committed
-  exception (5k-row-free toy fixture used by tests/HF).
+- Do not commit `features.parquet`; `sample_500.parquet` is the only committed
+  exception — 500 **synthetic** rows used by tests/HF Space demos.
 - Do not claim leaderboard or "real" metrics from synthetic runs.
