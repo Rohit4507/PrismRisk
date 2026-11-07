@@ -58,6 +58,31 @@ python scripts/prepare_raw.py
 python -m prismrisk.features
 ```
 
+### Route E — `kagglehub` (the snippet Kaggle itself shows)
+
+Alternative to the CLI — same rules acceptance + token required. Handy because it
+prints the exact path to the extracted files:
+
+```python
+import kagglehub
+path = kagglehub.competition_download("home-credit-credit-risk-model-stability")
+print(path)   # e.g. C:\\Users\\<you>\\.cache\\kagglehub\\competitions\\home-credit-credit-risk-model-stability
+```
+
+`kagglehub` extracts to its own cache (NOT into `./data/`), preserving the zip's
+top-level `csv_files/` folder. Point the adapter at it — no other changes needed:
+
+```bash
+ls "<printed path>"                                # confirm you see csv_files/train + test inside
+python scripts/prepare_raw.py --src "<printed path>/csv_files/train" --out data/raw
+# if the train/ folder is directly at "<printed path>/train" instead, use that
+python -m prismrisk.features
+```
+
+One-off install: `pip install kagglehub` (deliberately NOT a project dependency).
+`kaggle` CLI and `kagglehub` are interchangeable — both need the accepted rules and
+`kaggle.json` (or `KAGGLE_USERNAME`/`KAGGLE_KEY` env vars).
+
 ### Manual browser download (slow internet / CLI trouble)
 
 Competition page → **Data** tab → **Download All** (needs the same accepted rules) →
