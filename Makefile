@@ -1,10 +1,13 @@
-.PHONY: install features split test lint up loadtest smoke
+.PHONY: install data features split test lint up loadtest smoke
 PYTHONPATH := src
 
 install:
 	pip install -e ".[dev]"
 
-features:            ## Build features.parquet from raw Kaggle CSVs (needs data/raw/*.parquet)
+data:                ## Download Kaggle comp data + build data/raw/*.parquet (see data/README.md)
+	bash scripts/download_data.sh && PYTHONPATH=$(PYTHONPATH) python scripts/prepare_raw.py
+
+features:            ## Build features.parquet from data/raw/*.parquet (needs data; see data/README.md)
 	PYTHONPATH=$(PYTHONPATH) python -m prismrisk.features
 
 split:               ## Sanity-check week splits

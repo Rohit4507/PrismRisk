@@ -42,6 +42,18 @@ def _days_name(col: str) -> str:
     return re.sub(r"_?D$", "", col) + "_days"
 
 
+def _date_expr(df: pl.DataFrame, col: str) -> pl.Expr:
+    """Date expression tolerant to CSV round-trips.
+
+    Parquet (synthetic fixture / real Kaggle parquet) carries native Date columns;
+    CSVs arrive as String. Strict parse by default: fail loudly on unparseable
+    values instead of silently emitting null days.
+    """
+    if df.schema.get(col) == pl.String:
+        return pl.col(col).str.to_date()
+    return pl.col(col).cast(pl.Date)
+
+
 
 # ---------------------------------------------------------------- primitives
 def relative_date_days(
@@ -49,7 +61,7 @@ def relative_date_days(
 ) -> pl.DataFrame:
     """Convert an absolute `*D` date column to float days before the decision date."""
     return df.with_columns(
-        (pl.col(ref).cast(pl.Date) - pl.col(col).cast(pl.Date))
+        (_date_expr(df, ref) - _date_expr(df, col))
         .dt.total_days()
         .cast(pl.Float32)
         .alias(_days_name(col))
@@ -69,7 +81,7 @@ def convert_date_columns(
         return df
     df = df.with_columns(
         [
-            (pl.col(ref).cast(pl.Date) - pl.col(c).cast(pl.Date))
+            (_date_expr(df, ref) - _date_expr(df, c))
             .dt.total_days()
             .cast(pl.Float32)
             .alias(_days_name(c))

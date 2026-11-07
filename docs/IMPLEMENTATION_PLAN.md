@@ -37,7 +37,8 @@ PrismRisk/                      # already exists — work inside, don't re-init
 ├── .gitignore
 ├── Dockerfile                  # multi-stage FastAPI image
 ├── docker-compose.yml          # api:8000 + mlflow:5000 + dashboard:8501
-├── Makefile                    # features | train | test | up | loadtest
+├── Makefile                    # data | features | test | up | loadtest
+├── data/README.md              # Kaggle download steps; competition data never committed
 ├── README.md                   # leads with Live Demo → architecture → tables
 ├── pyproject.toml + uv.lock
 ├── configs/config.yaml         # single source of truth (weeks, profit, monotone, DiCE bounds)

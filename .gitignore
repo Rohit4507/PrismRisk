@@ -220,6 +220,8 @@ __marimo__/
 .streamlit/secrets.toml
 
 # --- PrismRisk project ---
+data/csv_files/          # Kaggle download unpacks here (never committed, see data/README.md)
+data/*.zip
 data/raw/
 data/raw_synth/
 data/processed/*

@@ -26,8 +26,7 @@ python scripts/make_synthetic.py --rows 2000   # synthetic smoke stand-in
 ```
 
 ## Data
-Not committed (competition rules). Dev fixture: `python scripts/make_synthetic.py --rows 300000`
-(synthetic ~$33k loans, pre/post Week-60 default shock 12% → 23%). For **real metrics**:
-(A) UCI "Default of Credit Card Clients", 30k rows, clean license, commit-ready mirrors on GitHub; or
-(B) Kaggle `home-credit-credit-risk-model-stability` CSVs (login + 1-time rules click) →
-`python -m prismrisk.features --sample`. See docs/IMPLEMENTATION_PLAN.md §0.
+Not committed (competition rules — see **data/README.md**).
+- **Real-data run**: `make data` (Kaggle login + one-time rules click, ~4 GB), or **(A)** UCI "Default of Credit Card Clients" (30k rows, license-friendly, needs a small column adapter).
+- **Dev/CI**: `python scripts/make_synthetic.py --rows 300000` — synthetic ~$33k loans, pre/post Week-60 default shock 12% → 23%; demo-grade numbers, never presented as real.
+Tests and CI need no download (synthetic only).
