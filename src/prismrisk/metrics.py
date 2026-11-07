@@ -1,9 +1,19 @@
 """Evaluation metrics: weekly Gini stability, calibration (Brier/ECE), net profit $.
 
-NOTE on the competition metric: Kaggle's official "stability" metric is defined per
-evaluation sample (weekly). We expose a documented *proxy* —
-mean/std/min of weekly Gini plus an optional slope-penalty "custom_stability" —
-and never claim it reproduces the official leaderboard number.
+NOTE on the competition metric: Kaggle's "Credit Risk Model Stability" competition
+scores models NOT on raw AUC but on weekly Gini stability::
+
+    stability = mean(weekly Gini) + 88 * min(0, slope) - 0.5 * std(residuals)
+
+where gini_w = 2*AUC_w - 1 is computed per WEEK_NUM, a line is fitted through the
+weekly values, ``slope`` is its slope, and ``std(residuals)`` is the standard
+deviation of the residuals around that line. A downward trend is penalised; an
+upward trend earns nothing. Two independent open implementations agree on this
+formula and match the competition's reference code (Bra-AM/erdos-homecreditmodelstability
+src/creditrisk/metrics.py, and the silver-medalist utils in
+varuni-rao/home-credit-risk-stability-silver). We implement the same formula
+(verified from those sources; the competition page itself is not reachable from
+this sandbox). Weeks with a single class are skipped.
 """
 
 from __future__ import annotations
@@ -39,16 +49,19 @@ def weekly_gini_stability(weeks, y_true, y_prob) -> dict[str, float]:
 
     xs = np.array(sorted(gini_per_week), dtype=np.float64)
     gs = np.array([gini_per_week[int(x)] for x in xs])
-    slope = float(np.polyfit(xs, gs, 1)[0]) if xs.size >= 3 else 0.0
+    slope, intercept = (np.polyfit(xs, gs, 1) if xs.size >= 3 else (0.0, float(gs.mean())))
+    residual_std = float((gs - (slope * xs + intercept)).std(ddof=0))
     mean_g = float(gs.mean())
-    std_g = float(gs.std(ddof=0))
     return {
         "mean_gini": mean_g,
-        "std_gini": std_g,
+        "std_gini": float(gs.std(ddof=0)),
         "min_gini": float(gs.min()),
-        "slope_per_week": slope,
-        # custom proxy, NOT the official Kaggle metric:
-        "custom_stability": mean_g + 88.0 * min(0.0, slope) - 0.5 * std_g,
+        "slope_per_week": float(slope),
+        "residual_std_gini": residual_std,
+        # the competition metric (see module docstring):
+        "stability": mean_g + 88.0 * min(0.0, float(slope)) - 0.5 * residual_std,
+        # backwards-compat alias (deprecated):
+        "custom_stability": mean_g + 88.0 * min(0.0, float(slope)) - 0.5 * residual_std,
         "n_weeks": float(len(gini_per_week)),
     }
 

@@ -159,7 +159,8 @@ def split_metrics(model, X, y, weeks, amounts, *, cfg) -> dict:
         "roc_auc": roc_auc_score(y, p),
         "pr_auc": average_precision_score(y, p),
         "gini": 2 * roc_auc_score(y, p) - 1.0,
-        "gini_stability_custom": gini["custom_stability"],
+        "gini_stability": gini["stability"],
+        "gini_stability_custom": gini["stability"],  # deprecated alias
         "gini_week_min": gini["min_gini"],
         "brier": brier_score_loss(y, p),
         "ece": M.expected_calibration_error(y, p),
