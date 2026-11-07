@@ -21,6 +21,7 @@ governance:
     - max_dpd_prev
     - annuity_to_income
     - credamount_to_income
+    - risk_band_pct               # bureau's own default-risk band (sparse, ~3.5% coverage)
     - max_dpd_total_001P          # synthetic demo equivalent of max_dpd_bureau
     - max_static_past_dpd_001P    # synthetic demo equivalent of max_dpd_prev
   monotone_minus:            # -1: higher value must not increase predicted risk

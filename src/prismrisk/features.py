@@ -68,6 +68,40 @@ def relative_date_days(
     )
 
 
+# Bureau risk-band text (e.g. `riskassesment_940T` = "6% - 8%" in static_cb_0) is the
+# competition's strongest single signal when present (~3.5% coverage; Bra-AM /
+# Erdos Institute bootcamp). Parsed to the band midpoint (or boundary for tails).
+RISK_BAND_COLUMNS = ("riskassesment_940T",)
+
+
+def engineer_risk_band(df: pl.DataFrame) -> pl.DataFrame:
+    """Parse `riskassesment_940T`-style band text into `risk_band_pct` (Float32 percent).
+
+    '6% - 8%' -> 7.0 (midpoint); '>95%' -> 95.0 and '<3%' -> 3.0 (stated boundary);
+    empty / unparseable -> null (kept, not zero — NaN is informative to GBMs).
+    Absent column -> frame returned unchanged (this feature exists only in the
+    real competition data). The raw text column is dropped; the parsed column
+    stays ~96% null by design and is exempt from the high-null drop.
+    """
+    for col in RISK_BAND_COLUMNS:
+        if col not in df.columns:
+            continue
+        listed = (
+            pl.col(col)
+            .cast(pl.String)
+            .str.strip_chars()
+            .str.to_lowercase()
+            .fill_null("")
+            .str.extract_all(r"\d+(?:\.\d+)?")
+        )
+        first = listed.list.get(0, null_on_oob=True).cast(pl.Float64, strict=False)
+        second = listed.list.get(1, null_on_oob=True).cast(pl.Float64, strict=False)
+        n = listed.list.len()
+        pct = pl.when(n >= 2).then((first + second) / 2.0).otherwise(first)
+        df = df.with_columns(pct.cast(pl.Float32).alias("risk_band_pct")).drop(col)
+    return df
+
+
 def find_date_columns(columns: list[str]) -> list[str]:
     return [c for c in columns if _DATE_RE.search(c) and not c.endswith("_days")]
 
@@ -271,6 +305,7 @@ def build_features(raw_dir: Path, out_path: Path, config=None) -> Path:
     base, parts = _load_tables(raw_dir, cfg)
 
     df = one_row_per_case(base, parts)
+    df = engineer_risk_band(df)
 
     # income column: keep under stable name used by ratios/monotone rules
     if "mainoccupationinc_384A" in df.columns:
@@ -287,9 +322,12 @@ def build_features(raw_dir: Path, out_path: Path, config=None) -> Path:
     df = add_ratio_features(df) if {"maininc_clean", "credamount_770A"} <= set(df.columns) else df
 
     # cast floats -> Float32, drop >95%-null cols fit on TRAIN weeks only
+    # (risk_band_pct is ~96% null by design — kept deliberately; see engineer_risk_band)
     train_mask = (pl.col(cfg.week_col) >= cfg.train_weeks[0]) & (pl.col(cfg.week_col) <= cfg.train_weeks[1])
     train_part = df.filter(train_mask)
-    drop_cols = high_null_cols(train_part, cfg.null_col_threshold, exclude=(cfg.id_col, cfg.week_col, cfg.target))
+    keep_sparse = tuple(c for c in ("risk_band_pct",) if c in df.columns)
+    null_exclude = (cfg.id_col, cfg.week_col, cfg.target, *keep_sparse)
+    drop_cols = high_null_cols(train_part, cfg.null_col_threshold, exclude=null_exclude)
     if drop_cols:
         df = df.drop(drop_cols)
 

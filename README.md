@@ -1,5 +1,7 @@
 # PrismRisk
 
+[![CI](https://github.com/Rohit4507/PrismRisk/actions/workflows/ci.yml/badge.svg)](https://github.com/Rohit4507/PrismRisk/actions/workflows/ci.yml)
+
 Temporal credit decision & MLOps system — monotone LightGBM + isotonic calibration,
 MAPIE conformal grey-zone triage, DiCE counterfactual recourse, zero-hallucination
 adverse-action notices, weekly PSI drift monitoring.

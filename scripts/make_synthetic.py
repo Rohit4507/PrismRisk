@@ -4,6 +4,10 @@ Two regimes are baked in so the pipeline's drift story is visible:
   * WEEK_NUM 0-59  : steady-state baseline
   * WEEK_NUM 60-91 : "COVID shock" — default odds shift, channel mix shifts online
 
+Also emits `riskassesment_940T` (~3.5% coverage, text bands like "6% - 8%"), the
+competition's sparsest-but-strongest bureau signal, so the parser in
+features.engineer_risk_band is exercised end-to-end on the synthetic fixture.
+
 Used for smoke runs, CI, and the HF Space demo fixture. Never committed as if it
 were real competition data (config-driven: real Kaggle parquet plugs in unchanged).
 
@@ -102,11 +106,22 @@ def generate(rows: int = 2000, seed: int = 42) -> dict[str, pl.DataFrame]:
             "bureau_origamount_003A": np.concatenate([loan * 0.6, loan * 0.4]).astype(np.float32),
         }
     )
+    # Bureau risk band as TEXT (mirrors the competition's riskassesment_940T):
+    # only ~3.5% of applicants have one — the parse is the point (top single
+    # feature when present). Defaulters land on higher bands on average.
+    bands = ["0% - 3%", "4% - 6%", "7% - 11%", "12% - 19%", "20% - 34%", "35% - 59%", "60% - 95%", ">95%"]
+    covered = rng.uniform(size=rows) < 0.035
+    band_u = rng.uniform(size=rows)
+    exponent = np.clip(1.0 - 1.6 * p, 0.15, 1.0)
+    band_idx = np.clip((band_u**exponent * len(bands)).astype(int), 0, len(bands) - 1)
+    risk_band = np.where(covered, np.array(bands)[band_idx], "")
+
     static_cb = pl.DataFrame(
         {
             "case_id": case_id,
             "cb_score_001": rng.normal(650, 90, size=rows).astype(np.float32),
             "birth_cb_002D": base_date - rng.integers(20 * 365, 65 * 365, size=rows).astype("timedelta64[D]"),
+            "riskassesment_940T": risk_band,  # ~3.5% non-empty — mirrors competition coverage
         }
     )
     return {
