@@ -1,0 +1,2 @@
+# Jupyter notebooks are documentation, not source code -> GitHub badge stays "Python".
+notebooks/*.ipynb linguist-documentation
