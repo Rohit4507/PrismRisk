@@ -13,7 +13,7 @@ it keeps separating defaulters week after week through the COVID-era distributio
 (weeks ~60+). PrismRisk is an end-to-end answer: data → model → calibration →
 conformal triage → recourse → service → drift monitoring, built like a product, not a notebook.
 
-## What is implemented and verified (tests: 31/31 green)
+## What is implemented and verified (tests: 35/35 green)
 - **Time-locked splits** W0–59 train · W60–69 isotonic calibration + conformal fit ·
   W70–79 Optuna selection · W80–91 locked test — never shuffled.
 - **Models**: LogReg · MLP · XGBoost · monotone-constrained LightGBM (Optuna) with
@@ -30,9 +30,19 @@ conformal triage → recourse → service → drift monitoring, built like a pro
   the competition's strongest single signal; parsed to a monotone feature (+ sparse by
   design, exempt from the null filter).
 - **Engineering**: DuckDB/Polars joins (depth-0 direct, depth-1 aggregated) · MLflow
-  registry (`PrismRiskChampion`, sqlite) · Docker + CI (GitHub Actions: ruff + pytest) ·
-  weekly PSI drift (Evidently) · HF Space demo · 2 notebooks · config-driven
+  registry (`PrismRiskChampion` v1, sqlite) · Docker + CI (GitHub Actions: ruff + pytest) ·
+  weekly PSI drift monitor (in-house PSI → self-contained HTML report; Evidently dropped) · HF Space demo · 2 notebooks · config-driven
   (`configs/config.yaml`) · no real rows committed, ever.
+- **DiCE recourse (M4)**: demand-side, immutable features locked, ratio-aware model
+  wrapper (credamount/income ratios recomputed inside), top actionable drivers by |SHAP|
+  with train-quantile bounds; infeasible requests return an honest `feasible=False`.
+
+## Real Kaggle run (2026-11-09, user machine — locked W80–91, trials=5)
+ROC-AUC **0.8540** (flat vs val 0.8541) · PR-AUC 0.1468 · ECE 0.0165 ·
+weekly-Gini stability **0.6843** (slope **+0.0044**/wk, residual std 0.031, min 0.627) ·
+bureau risk-band parse exercised on the real `static_cb_0`. Champion: xgboost_unconstrained
+(monotone LGBM within 0.0005 — governance call). Full details: docs/REAL_RUN.md. Not a
+leaderboard claim; no submission made.
 
 ## What is deliberately honest
 - No leaderboard claims. The stability formula is a faithful re-implementation, not an

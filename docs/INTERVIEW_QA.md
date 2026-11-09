@@ -54,10 +54,14 @@ and audit your metric against reference code before trusting it. I rejected Auto
 deliberately — banking governance needs monotone-constrained, explainable models."
 
 ## Q: What's your best result — real?
-"Honest split: on the 300k-row synthetic fixture with an engineered Week-60 shock — ROC-AUC
-≈ 0.90, PR-AUC 0.667, ECE 0.002 after calibration, conformal coverage 0.90/0.90, weekly-Gini
-stability 0.758. These are pipeline-validation numbers, labeled as such. Real Kaggle numbers
-will replace them after `make data` — I won't quote unmeasured results as real."
+"Real run on the Kaggle competition data (locked W80–91 test, 5 Optuna trials,
+2026-11-09): **ROC-AUC 0.8540** (val 0.8541 → no generalization drop through the
+COVID window), PR-AUC 0.147, ECE 0.017, weekly-Gini stability 0.684 on 12 test
+weeks with a **positive** slope (+0.004/week — no decay). Champion was
+xgboost_unconstrained; monotone LightGBM was within 0.0005 (governance tie — I report
+it as a measured tie, not as a win for governance). Synthetic-fixture numbers
+(conformal coverage 0.90) and the real-data run are labeled separately in the
+README; no leaderboard claim, no submission."
 
 ## Trap questions + honest answers
 - **"Why is your binary cutoff beating conformal?"** — "It did, $139.0M vs $122.2M on this
@@ -67,8 +71,7 @@ will replace them after `make data` — I won't quote unmeasured results as real
   competition used it. Class weights + isotonic calibration instead."
 - **"Is your sample fixture real?"** — "No — 500 synthetic rows so CI/demo never touch real
   data. Real evaluation needs the Kaggle download."
-- **"What would you fix first at scale?"** — "Real-data run + SHAP-bottlenecked recourse,
-  Locust p95 under 100 users, then HF Space cold-start tuning."
+- **"What would you fix first at scale?"** — "Conformal triage (M3) on real data + Locust p95 under 100 users, then HF Space cold-start tuning."
 
 ## 60-second pitch (memorize)
 "PrismRisk answers 'your model is decaying in production'. Home Credit's stability

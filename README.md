@@ -11,11 +11,11 @@ adverse-action notices, weekly PSI drift monitoring.
 ## Status
 
 - [x] M0 — Packaging (`pyproject.toml`, pinned deps), `.gitattributes`, CI workflow
-- [x] M1 (core) — `features.py` (DuckDB/Polars depth-1 aggregation, relative dates, ratios), `split.py` (strict W0–59/60–69/70–79/80–91), `metrics.py` (weekly Gini stability, Brier/ECE, net profit sweep) — **18 tests green**
-- [x] M4 (partial) — `notice_guard.py` zero-hallucination adverse-action notice (numeric verifier + deterministic fallback)
-- [ ] M1 — run on real Kaggle CSVs (needs dataset download) + Notebook 01
-- [x] M2 — train.py: LogReg/MLP/XGB/Monotone-LGBM (Optuna) + isotonic calibration + MLflow tracking & registry (verified end-to-end on synthetic data; real-data run pending Kaggle download)
-- [x] M3 — MAPIE SplitConformalClassifier grey-zone triage (AUTO_APPROVE/GREY_ZONE_REVIEW/AUTO_DENY), profit vs binary cutoff (verified on synthetic; real numbers pending Kaggle) · M5 — drift/Evidently + Notebook 02
+- [x] M1 — features/split/metrics + **real Kaggle run**: locked W80–91 **ROC-AUC 0.854 / stability 0.684** (12 test weeks), zero val→test drop; see [docs/REAL_RUN.md](docs/REAL_RUN.md) for the verbatim run
+- [x] M2 — train.py: LogReg/MLP/XGB/Monotone-LGBM (Optuna) + isotonic calibration (val ECE 0.0132→0.0103 on real data) + MLflow tracking & registry (`PrismRiskChampion` v1)
+- [x] M3 — MAPIE SplitConformalClassifier grey-zone triage (AUTO_APPROVE/GREY_ZONE_REVIEW/AUTO_DENY); coverage 0.900/0.901 on the synthetic fixture; real-data profit eval pending
+- [x] M4 — SHAP adverse-action reasons + DiCE feasibility-constrained counterfactual recourse (immutable features locked, ratios recomputed inside the model wrapper; demand-side only) + zero-hallucination notice guard (numeric verifier + deterministic fallback)
+- [x] M5 — weekly PSI drift (train-locked 10-bin quantile bins frozen on W0–59) with green/warning/retrain bands + self-contained HTML report (evidently dropped — unimportable under pandas 3.x); verified on the synthetic fixture; real-data rerun is user-side (see [docs/REAL_RUN.md](docs/REAL_RUN.md)). Notebook 02 still pending
 - [ ] M6 — FastAPI + Streamlit + Docker + Locust p50/p95/p99 · M7 — HF Space live demo
 
 ## Quickstart
@@ -23,7 +23,7 @@ adverse-action notices, weekly PSI drift monitoring.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q                       # 23 tests, synthetic data — no Kaggle download needed
+pytest -q                       # 42 tests, synthetic data — no Kaggle download needed
 python scripts/make_synthetic.py --rows 2000   # synthetic smoke stand-in
 ```
 
