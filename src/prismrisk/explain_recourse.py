@@ -74,9 +74,13 @@ def _unwrap_tree(model):
         ) from exc
 
 
-def _shap_contrib(model, X_row: pd.DataFrame) -> np.ndarray:
-    """Positive-class SHAP contributions for the single row of X_row."""
-    explainer = _unwrap_tree(model)
+def _shap_contrib(model, X_row: pd.DataFrame, explainer=None) -> np.ndarray:
+    """Positive-class SHAP contributions for the single row of X_row.
+
+    Pass a pre-built `explainer` (e.g. cached shap.TreeExplainer) on hot paths;
+    building one per call costs tens of ms.
+    """
+    explainer = explainer if explainer is not None else _unwrap_tree(model)
     raw = explainer.shap_values(X_row)
     if isinstance(raw, list):        # LightGBM >=1.x / sklearn API list: [class0, class1]
         arr = np.asarray(raw[-1])
@@ -87,9 +91,9 @@ def _shap_contrib(model, X_row: pd.DataFrame) -> np.ndarray:
     return arr[0]
 
 
-def top_risk_reasons(model, X_row: pd.DataFrame, k: int = 3) -> list[dict]:
+def top_risk_reasons(model, X_row: pd.DataFrame, k: int = 3, explainer=None) -> list[dict]:
     """Top-k risk-INCREASING contributions for the applicant (adverse-notice evidence)."""
-    contrib = _shap_contrib(model, X_row)
+    contrib = _shap_contrib(model, X_row, explainer=explainer)
     out: list[dict] = []
     for i in np.argsort(-contrib):
         v = float(contrib[i])
@@ -259,9 +263,21 @@ def recourse(model, X_train: pd.DataFrame, query, *, immutable: list[str] | None
 
     bg = X_train.iloc[np.random.default_rng(seed).choice(
         X_train.shape[0], size=min(bg_rows, X_train.shape[0]), replace=False)]
+    # DiCE cannot ingest missing values: impute query + background with background
+    # medians for the search only (the model itself handles NaN). Which columns
+    # were filled is reported, never hidden.
+    imputed = [c for c in q.columns if bool(q[c].isna().any()) or bool(bg[c].isna().any())]
+    if imputed:
+        bg = bg.copy()
+        q = q.copy()
+        meds = {c: (float(np.nanmedian(bg[c].to_numpy(dtype=np.float64))) if bool(bg[c].notna().any()) else 0.0)
+                for c in imputed}
+        bg[imputed] = bg[imputed].fillna(meds)
+        q[imputed] = q[imputed].fillna(meds)
     vary, pr = _build_pr(bg, vary, permitted_range)
     if not pr:
-        return _empty(reasons, imm, "permitted bounds are pinned to a point; no feasible action exists")
+        return {**_empty(reasons, imm, "permitted bounds are pinned to a point; no feasible action exists"),
+                "features_varied": vary, "imputed_features": imputed}
 
     try:
         np.random.seed(seed)  # dice-ml's genetic search has no explicit seed param
@@ -273,10 +289,10 @@ def recourse(model, X_train: pd.DataFrame, query, *, immutable: list[str] | None
         cf_df = _first_cf_df(cf_obj)
     except Exception as exc:  # DiCE failure -> honest empty result, never a fabricated CF
         return {**_empty(reasons, imm, f"DiCE found no counterfactuals ({exc})"),
-                "features_varied": vary}
+                "features_varied": vary, "imputed_features": imputed}
     if cf_df is None:
         return {**_empty(reasons, imm, "no counterfactual inside permitted bounds"),
-                "features_varied": vary}
+                "features_varied": vary, "imputed_features": imputed}
 
     scale = {c: float(np.nanmedian(np.abs(bg[c].to_numpy(dtype=np.float64)))) + 1e-6 for c in vary}
     out_cfs = _extract_cfs(cf_df, vary, scale, q.iloc[0], imm)
@@ -287,6 +303,7 @@ def recourse(model, X_train: pd.DataFrame, query, *, immutable: list[str] | None
         "counterfactuals": out_cfs[:2],
         "immutable_locked": list(imm),
         "features_varied": vary,
+        "imputed_features": imputed,
         "note": None if out_cfs else "counterfactuals violate immutability constraints and were discarded",
     }
 

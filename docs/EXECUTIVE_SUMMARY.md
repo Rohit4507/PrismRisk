@@ -31,8 +31,12 @@ conformal triage → recourse → service → drift monitoring, built like a pro
   design, exempt from the null filter).
 - **Engineering**: DuckDB/Polars joins (depth-0 direct, depth-1 aggregated) · MLflow
   registry (`PrismRiskChampion` v1, sqlite) · Docker + CI (GitHub Actions: ruff + pytest) ·
-  weekly PSI drift monitor (in-house PSI → self-contained HTML report; Evidently dropped) · HF Space demo · 2 notebooks · config-driven
-  (`configs/config.yaml`) · no real rows committed, ever.
+  FastAPI service (`/predict` with SHAP reasons + 3-way conformal decision + expected profit,
+  `/recourse` demand-side DiCE with numeric-verified letter, measured latency per response) ·
+  Locust benchmark on the dev box (10 u: p50 30 ms / p95 56 ms / ~148 RPS · 100 u saturated single
+  worker: p50 500 ms / p95 640 ms / ~168 RPS, 0 failures — indicative, demo artefacts only) ·
+  weekly PSI drift monitor (in-house PSI → self-contained HTML report; Evidently dropped) ·
+  HF Space demo · 2 notebooks · config-driven (`configs/config.yaml`) · no real rows committed, ever.
 - **DiCE recourse (M4)**: demand-side, immutable features locked, ratio-aware model
   wrapper (credamount/income ratios recomputed inside), top actionable drivers by |SHAP|
   with train-quantile bounds; infeasible requests return an honest `feasible=False`.

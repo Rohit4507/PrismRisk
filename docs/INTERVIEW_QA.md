@@ -71,7 +71,7 @@ README; no leaderboard claim, no submission."
   competition used it. Class weights + isotonic calibration instead."
 - **"Is your sample fixture real?"** — "No — 500 synthetic rows so CI/demo never touch real
   data. Real evaluation needs the Kaggle download."
-- **"What would you fix first at scale?"** — "Conformal triage (M3) on real data + Locust p95 under 100 users, then HF Space cold-start tuning."
+- **"What would you fix first at scale?"** — "Conformal triage (M3) on real data, then HF Space cold-start tuning and worker scaling. Measured so far (demo artefacts, dev box): 10 concurrent users p50 30 ms / p95 56 ms (~148 RPS); at 100 users a single uvicorn worker saturates (p50 500 ms / p95 640 ms / ~168 RPS, 0 errors) — so the next step is more workers + SHAP kept off the critical path if p95 must hold under load, not a claim that it is fine as-is."
 
 ## 60-second pitch (memorize)
 "PrismRisk answers 'your model is decaying in production'. Home Credit's stability

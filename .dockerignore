@@ -1,0 +1,24 @@
+# NOTE: models/ is excluded on purpose — champion bundles are never baked into images
+# (real artifacts live on the training box / HF Space only).
+.git
+.github
+.venv
+__pycache__
+**/__pycache__
+**/*.pyc
+.arena
+docs
+notebooks
+reports
+models
+mlruns
+mlflow.db
+data/raw
+data/processed/features.parquet
+data/processed/*.parquet
+!data/processed/sample_500.parquet
+tests
+.dockerignore
+Dockerfile
+docker-compose.yml
+Makefile

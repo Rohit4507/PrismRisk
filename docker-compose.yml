@@ -1,0 +1,43 @@
+# PrismRisk stack: API + Streamlit dashboard + MLflow tracking UI.
+# Demo works out of the box (synthetic fixture). Production: bind-mount ./models
+# with champion_bundle.joblib + conformal_triage.joblib and set PRISMRISK_BUNDLE.
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      # PRISMRISK_BUNDLE: /app/models/champion_bundle.joblib
+      # PRISMRISK_TRIAGE: /app/models/conformal_triage.joblib
+      # PRISMRISK_BACKGROUND: /app/models/background_features.parquet
+      PYTHONUNBUFFERED: "1"
+    # volumes:
+    #   - ./models:/app/models:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    command: ["streamlit", "run", "dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--browser.gatherUsageStats=false"]
+    ports: ["8501:8501"]
+    environment:
+      PRISMRISK_API_URL: http://api:8000      # server-side call over the compose network
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mlflow:
+    build: .
+    command: ["mlflow", "ui", "--host", "0.0.0.0", "--port", "5000", "--backend-store-uri", "sqlite:////mlflow/mlflow.db"]
+    ports: ["5000:5000"]
+    volumes:
+      - mlflow-data:/mlflow
+    restart: unless-stopped
+
+volumes:
+  mlflow-data:
