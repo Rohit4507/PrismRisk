@@ -25,5 +25,11 @@ smoke:               ## Synthetic end-to-end smoke run (no Kaggle data needed)
 up:                  ## docker compose up --build (M6)
 	docker compose up --build
 
+api:                 ## API on :8000 (demo fixture fallback if no champion bundle)
+	uvicorn api.main:app --host 127.0.0.1 --port 8000
+
+dashboard:           ## Streamlit on :8501
+	streamlit run dashboard/app.py
+
 loadtest:            ## Locust headless benchmark (needs API running on :8000)
 	locust -f tests/locustfile.py --headless -u 100 -r 20 -t 60s --host http://localhost:8000

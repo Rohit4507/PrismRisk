@@ -59,6 +59,15 @@ MLflow: experiment `PrismRisk-Stability`, registered **`PrismRiskChampion` v1**.
   cutoff result is synthetic-only for now.
 - DiCE recourse (M4) is verified on the tiny synthetic fixture and on synthetic
   300k-row features; it has **not** been timed on the real 313-feature frame.
+  M6 hardened a real M4 defect: rows with NaN (e.g. `risk_band_pct`, ~3.5% coverage)
+  made DiCE throw before searching, silently returning `feasible=False`; recourse now
+  median-imputes query+background for the DiCE search only and reports the filled
+  columns as `imputed_features`. Timing on the demo (34 features, 200-row background):
+  single counterfactual ≈0.2 s.
+- Serving (M6) has **not** been exercised against the real champion bundle either
+  (no artifact in the dev sandbox) — endpoints are demo-verified; real-bundle smoke:
+  set `PRISMRISK_BUNDLE=models/real_champion.joblib` (+ `PRISMRISK_TRIAGE`,
+  `PRISMRISK_BACKGROUND`) locally and hit `/health` `/predict` `/recourse`.
 - M5 (PSI drift) is implemented and verified on the synthetic fixture only. To
   re-run on real data (needs the local champion bundle + full features, neither
   of which is in the repo):

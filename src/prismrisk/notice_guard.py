@@ -41,6 +41,7 @@ class EvidenceFacts:
                 self.reason_1,
                 self.reason_2,
                 self.reason_3,
+                self.applicant_ref,  # greeting may carry digits (e.g. case_id) — never ungrounded
             ]
         )
         return {m.group().replace(",", "") for m in NUMBER_RE.finditer(text)}

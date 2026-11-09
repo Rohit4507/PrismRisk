@@ -239,6 +239,29 @@ One clean results notebook (imports from `src/prismrisk/`), exporting PNGs to `r
 
 ## 9. Milestone 6 — FastAPI + Streamlit + Docker + Locust + CI (Days 17–20, ~7 h) · Upgrade #5
 
+> **Reality check (2026-11-09):** implemented; deviations vs this section:
+> - No champion bundle / triage artifact exists in the dev sandbox, so the API boots in an explicit
+>   `synthetic_demo_fixture` mode (tiny LightGBM trained at startup on the committed fixture, isotonic
+>   on calib weeks, MAPIE conformalize) — surfaced as `model_source` everywhere; never presented as the champion.
+> - `/predict` returns full SHAP reasons as designed; measured p50/p95 at 10 concurrent users (dev box):
+>   **30 ms / 56 ms** (≈148 RPS); at 100 users on one worker the worker saturates (p50 500 ms / p95 640 ms /
+>   ~168 RPS) — plan's "<15 ms" target was not held once SHAP-on-the-hot-path was added; single inference
+>   ≈15 ms. Numbers are indicative only; HF Space / real bundle will differ.
+> - `/predict` requires the **full** trained feature vector; missing features → 422 (never silently imputed).
+>   Strings only allowed for trained string columns; everything else coerced via float().
+>   Nulls become NaN (LightGBM-native), reported as such.
+> - DiCE cannot ingest missing values — rows with NaN (e.g. `risk_band_pct`, ~3.5% coverage) made recourse
+>   fail silently; fixed in `explain_recourse.recourse()`: query+background are median-imputed **for the DiCE
+>   search only** and the filled columns are returned as `imputed_features` (never hidden).
+> - Approved applicants get HTTP 200 from `/recourse` with `feasible: null` and an approval letter
+>   (adverse-action letters for approvals would be nonsense) — counterfactual search is skipped.
+> - Adverse-action notice for approvals replaced by a machine-verified approval letter;
+>   `applicant_ref` digits are now grounded via `allowed_numbers()` (case_id letters no longer false-fallback).
+> - Docker: Dockerfile (multi-stage, python:**3.12-slim** per plan, non-root, uvicorn 1 worker) + compose
+>   (api + dashboard + mlflow) written; **no container runtime in this sandbox — `docker compose up --build`
+>   not executed here** (user-side verify). Locust file shipped and measured (above).
+> - CI: lint scope widened to `api dashboard conftest.py`; CI still ruff + pytest only (docker build not added).
+
 ### 9.1 `api/main.py` (+ `schemas.py`, Pydantic v2)
 - Startup: `joblib.load("models/champion_bundle.joblib")` once. **No MLflow on the hot path.**
 - `GET /health` → `{status, model:"PrismRiskChampion", registry_version, trained_weeks:"0-59"}`
