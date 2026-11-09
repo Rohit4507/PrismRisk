@@ -31,7 +31,7 @@ conformal triage → recourse → service → drift monitoring, built like a pro
   design, exempt from the null filter).
 - **Engineering**: DuckDB/Polars joins (depth-0 direct, depth-1 aggregated) · MLflow
   registry (`PrismRiskChampion` v1, sqlite) · Docker + CI (GitHub Actions: ruff + pytest) ·
-  weekly PSI drift (Evidently) · HF Space demo · 2 notebooks · config-driven
+  weekly PSI drift monitor (in-house PSI → self-contained HTML report; Evidently dropped) · HF Space demo · 2 notebooks · config-driven
   (`configs/config.yaml`) · no real rows committed, ever.
 - **DiCE recourse (M4)**: demand-side, immutable features locked, ratio-aware model
   wrapper (credamount/income ratios recomputed inside), top actionable drivers by |SHAP|

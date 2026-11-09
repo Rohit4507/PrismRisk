@@ -59,6 +59,16 @@ MLflow: experiment `PrismRisk-Stability`, registered **`PrismRiskChampion` v1**.
   cutoff result is synthetic-only for now.
 - DiCE recourse (M4) is verified on the tiny synthetic fixture and on synthetic
   300k-row features; it has **not** been timed on the real 313-feature frame.
+- M5 (PSI drift) is implemented and verified on the synthetic fixture only. To
+  re-run on real data (needs the local champion bundle + full features, neither
+  of which is in the repo):
+
+  ```powershell
+  python -m prismrisk.drift --features data/processed/features.parquet --bundle models/real_champion.joblib
+  ```
+
+  Outputs: `reports/psi_weekly.csv` + `reports/drift.html` (gitignored).
+  Note: evidently was dropped — see docs/IMPLEMENTATION_PLAN.md §8 reality-check.
 
 ## To reproduce / extend
 

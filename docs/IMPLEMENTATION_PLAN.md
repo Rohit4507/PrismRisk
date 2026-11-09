@@ -55,7 +55,7 @@ PrismRisk/                      # already exists — work inside, don't re-init
 │   ├── triage.py               # MAPIE SplitConformalClassifier → 3-way triage
 │   ├── explain_recourse.py     # TreeSHAP top-3 + DiCE constrained counterfactuals
 │   ├── notice_guard.py         # grounded applicant letter + numeric verifier
-│   └── drift.py                # weekly PSI (train bins) + Evidently HTML
+│   └── drift.py                # weekly PSI (train bins) + in-house HTML report
 ├── api/
 │   ├── schemas.py              # Pydantic v2 contracts
 │   └── main.py                 # /health /predict /recourse /drift
@@ -70,7 +70,7 @@ PrismRisk/                      # already exists — work inside, don't re-init
 ```
 polars 2.1.0 · duckdb 2.0.0 · pyarrow 26.0.1 · lightgbm 4.7.0 · xgboost 3.2.0
 scikit-learn 1.9.1 · optuna 5.0.0 · mlflow 3.18.0 · mapie 1.6.0 · dice-ml 0.12
-shap 0.51.0 · evidently 0.7.23 · fastapi 0.162.0 · uvicorn 0.54.0 · streamlit 1.67.0
+shap 0.51.0 · fastapi 0.162.0 · uvicorn 0.54.0 · streamlit 1.67.0  (evidently 0.7.23 dropped — see §8 reality-check)
 pydantic 2.14.3 · pyyaml 6.0.3 · joblib 1.6.0 · matplotlib 3.11.2 · seaborn 0.13.2
 pytest 9.2.0 · ruff 0.17.4 · locust 2.47.0 · httpx 0.28.1 · ipykernel 7.4.0
 ```
@@ -90,7 +90,7 @@ Pin exactly these in `pyproject.toml` (uv or pip — both fine; `uv.lock` commit
 # 1) package + tooling
 uv init --package prismrisk        # or: pip install -e . after writing pyproject.toml
 uv add polars duckdb pyarrow lightgbm xgboost scikit-learn optuna mlflow \
-       mapie dice-ml shap evidently fastapi "uvicorn[standard]" streamlit \
+       mapie dice-ml shap fastapi "uvicorn[standard]" streamlit \
        pydantic pyyaml joblib matplotlib seaborn
 uv add --dev pytest ruff locust httpx ipykernel
 # 2) hygiene files
@@ -218,11 +218,13 @@ cf = dice_data.generate_counterfactuals(q, total_CFs=4, desired_class="opposite"
 
 **Done gate (the money test):** unit test feeds a mock LLM letter containing fake `$9,999` → guard rejects → fallback template returned. Also test that immutable features never appear in DiCE output CFs.
 
-## 8. Milestone 5 — PSI drift + Evidently + Notebook 02 (Days 15–16, ~4 h)
+## 8. Milestone 5 — PSI drift + Notebook 02 (Days 15–16, ~4 h)
+
+> **Reality check (2026-11-09):** `evidently==0.7.23` is unimportable under pandas 3.x (its legacy layer imports `pandas.core.dtypes.common.infer_dtype_from_object`, removed in pandas 3); no newer evidently release fixes this and downgrading pandas was rejected. **Evidently is dropped from the dependency set.** `src/prismrisk/drift.py` now implements the whole milestone in-house with zero new deps: train-locked 10-quantile bin edges frozen on train weeks (W0–59), vectorized per-week PSI, green/warning/retrain bands, `reports/psi_weekly.csv` + `reports/drift.html` (inline SVG line chart + banded table, inline CSS, no assets). PD is computed exactly as at train time when `--bundle models/real_champion.joblib` is passed (bundle's `TableEncoder` maps + isotonic calibration); otherwise a pre-existing `--pd-col` is used. Covers all post-train weeks W60–91 (CLI/tests), not just W80–91. Verified on the synthetic fixture (`tests/test_drift.py`, 7 tests — identical ⇒ PSI≈0; N(0,1)→N(2,1) ⇒ retrain band); on the real data it must be re-run on the user machine (champion bundle + full `features.parquet` are not in the repo). **Notebook 02 (§8.2) is still pending.**
 
 ### 8.1 `src/prismrisk/drift.py`
 - Freeze 10 quantile bin edges on **train (W0–59)** per top-10 SHAP features + predicted PD.
-- For each test week W80–91: `PSI = Σ (p_b − q_b)·ln(p_b/q_b)`; bands `<0.10` green, `0.10–0.25` warning, `>0.25` retrain. Emit `reports/psi_weekly.csv` + `reports/evidently_drift.html`.
+- For each test week W80–91 (implemented for W60+): `PSI = Σ (p_b − q_b)·ln(p_b/q_b)`; bands `<0.10` green, `0.10–0.25` warning, `>0.25` retrain. Emit `reports/psi_weekly.csv` + `reports/drift.html` (in-house renderer, replaces `evidently_drift.html`).
 
 ### 8.2 Notebook `02_benchmark_calibration_xai.ipynb`
 One clean results notebook (imports from `src/prismrisk/`), exporting PNGs to `reports/figures/`:
