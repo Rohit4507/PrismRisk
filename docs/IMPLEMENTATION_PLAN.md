@@ -293,6 +293,13 @@ Multi-stage `python:3.12-slim`, non-root, `uvicorn` 1 worker; compose = api + ml
 
 ## 10. Milestone 7 — Live demo + launch (Day 21, ~2 h)
 
+> **Reality check (2026-11-06):** scaffolding done, deploy user-side. README is now demo-first
+> (live-demo section + architecture + real locked-test results table + figure links);
+> `docs/RESUME_BULLETS.md` (all numbers real & labeled) and `docs/HF_SPACE.md` (Docker SDK,
+> port 7860, synthetic-demo-only public Space, `nvidia_nccl_cu12`→xgboost root-cause and
+> `--no-deps` fix, 10-minute checklist) are committed. The Space itself, the README badge flip,
+> the M7 checkbox and real-champion exposure all wait for the user's HF account.
+
 1. HF Space (Docker SDK, free): `dashboard/app.py` + `src/prismrisk/` + `models/champion_bundle.joblib` + `data/processed/sample_500.parquet`. Recruiter clicks → try real W80–91 borrowers, SHAP reasons, grey-zone badge, recourse letter, PSI chart. (Needs your HF token + account — your action.)
 2. README order: **Live Demo link → architecture diagram → 4-model stability table → profit-lift (grey-zone vs cutoff) → Locust p50/p95/p99 → how to run locally (3 commands)**.
 3. Archive the old `Vehicle-Insurance-Claim-Prediction`; pin PrismRisk next to VehicleGPT / ScholarGraph / AI-collusion-sprint-Apart.
