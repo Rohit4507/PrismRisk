@@ -42,6 +42,9 @@ dev = [
     "ruff==0.17.4",
     "locust==2.47.0",
     "ipykernel==7.4.0",
+    "nbformat==5.11.1",   # notebook 02 (results) authoring/execution
+    "nbclient==0.11.0",
+    "nbconvert==7.17.2",
 ]
 
 [tool.setuptools.packages.find]
