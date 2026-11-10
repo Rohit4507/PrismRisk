@@ -13,7 +13,7 @@ it keeps separating defaulters week after week through the COVID-era distributio
 (weeks ~60+). PrismRisk is an end-to-end answer: data → model → calibration →
 conformal triage → recourse → service → drift monitoring, built like a product, not a notebook.
 
-## What is implemented and verified (tests: 35/35 green)
+## What is implemented and verified (tests: 49/49 green)
 - **Time-locked splits** W0–59 train · W60–69 isotonic calibration + conformal fit ·
   W70–79 Optuna selection · W80–91 locked test — never shuffled.
 - **Models**: LogReg · MLP · XGBoost · monotone-constrained LightGBM (Optuna) with
@@ -36,7 +36,8 @@ conformal triage → recourse → service → drift monitoring, built like a pro
   Locust benchmark on the dev box (10 u: p50 30 ms / p95 56 ms / ~148 RPS · 100 u saturated single
   worker: p50 500 ms / p95 640 ms / ~168 RPS, 0 failures — indicative, demo artefacts only) ·
   weekly PSI drift monitor (in-house PSI → self-contained HTML report; Evidently dropped) ·
-  HF Space demo · 2 notebooks · config-driven (`configs/config.yaml`) · no real rows committed, ever.
+  HF Space deploy guide (docs/HF_SPACE.md — deploy itself is user-side) · 2 notebooks
+  (02 executed; 01 pending) · config-driven (`configs/config.yaml`) · no real rows committed, ever.
 - **DiCE recourse (M4)**: demand-side, immutable features locked, ratio-aware model
   wrapper (credamount/income ratios recomputed inside), top actionable drivers by |SHAP|
   with train-quantile bounds; infeasible requests return an honest `feasible=False`.

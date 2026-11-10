@@ -2,11 +2,65 @@
 
 [![CI](https://github.com/Rohit4507/PrismRisk/actions/workflows/ci.yml/badge.svg)](https://github.com/Rohit4507/PrismRisk/actions/workflows/ci.yml)
 
-Temporal credit decision & MLOps system — monotone LightGBM + isotonic calibration,
+Temporal credit decision & MLOps system — XGBoost / monotone LightGBM + isotonic calibration,
 MAPIE conformal grey-zone triage, DiCE counterfactual recourse, zero-hallucination
 adverse-action notices, weekly PSI drift monitoring.
 
 > 📄 Full plan: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
+
+## Live Demo
+
+**HF Space — lands with M7; deploy guide ready: [docs/HF_SPACE.md](docs/HF_SPACE.md)** (~10 minutes, free CPU tier, user-side).
+Until it's live, run the identical stack locally — no Kaggle login, no data download needed:
+
+```bash
+pip install -e ".[dev]"
+uvicorn api.main:app --host 127.0.0.1 --port 8000 &
+streamlit run dashboard/app.py   # http://localhost:8501
+```
+
+What you get: pick a held-out **test-week** borrower (weeks 80–91) → calibrated PD + 3-way
+conformal badge (AUTO_APPROVE / GREY_ZONE_REVIEW / AUTO_DENY) → SHAP "why" → DiCE recourse
+→ numeric-verified decision letter. `/health` reports `model_source=synthetic_demo_fixture`
+— the demo never poses as the real champion ([docs/REAL_RUN.md](docs/REAL_RUN.md)).
+
+## Architecture
+
+```
+request ──► TableEncoder ──► tree champion (XGB / monotone LightGBM)
+              │                      │ raw P(default)
+              ▼                      ▼
+        /predict              isotonic calibration ──► conformal triage (MAPIE)
+              │                      │                      │
+              │                      ▼                      ▼
+              ├──────────── decision + expected profit + latency ◄── τ* / grey-zone sets
+              │
+              ├──► SHAP reasons ──► zero-hallucination notice guard ──► letter
+              └──► DiCE recourse (demand-side; immutable locked; ratios recomputed
+                   inside a calibrated wrapper; invalid CFs rejected)
+```
+
+## Key results — real Kaggle run (2026-11-09, locked W80–91; labeled, **not a leaderboard claim**)
+
+| Metric | Value |
+|---|---|
+| Champion | `xgboost_unconstrained` (val 0.8541); monotone LightGBM within 0.0005 (governance pick) |
+| ROC-AUC (locked test) | **0.8540** — flat vs val 0.8541, no COVID-window collapse |
+| PR-AUC (locked test) | 0.1468 (≈5× over ~3% prevalence) |
+| Weekly Gini | mean 0.7000 · std 0.0348 · min 0.6269 (slope +0.0044/wk) |
+| Stability (competition formula, re-implemented + tested) | **0.6843** (slope +0.0044/wk, residual std 0.031) |
+| Isotonic calibration (val) | ECE 0.0132 → **0.0103** |
+| τ* (profit-max cut, val) | 0.16 · max profit **$471,078,178** |
+
+Conformal 3-way policy **lost to the binary cutoff** on the synthetic distributions
+($25.29M vs $27.06M in Notebook 02; $122.2M vs $139.0M in the exec-summary fixture).
+Reported, not buried. Real-data conformal profit evaluation is still pending. Full detail:
+[docs/REAL_RUN.md](docs/REAL_RUN.md) · [docs/EXECUTIVE_SUMMARY.md](docs/EXECUTIVE_SUMMARY.md) ·
+figures from the executed synthetic notebook: [Notebook 02](notebooks/02_benchmark_calibration_xai.ipynb).
+
+Locust (demo model, dev box, indicative): 10u p50 30 ms · p95 56 ms · ~148 RPS · 100u saturated
+single worker p50 500 ms · p95 640 ms · ~168 RPS · 0 fails. Docker build not exercised in this
+sandbox — user-side: `docker compose up --build`.
 
 ## Status
 
@@ -14,29 +68,24 @@ adverse-action notices, weekly PSI drift monitoring.
 - [x] M1 — features/split/metrics + **real Kaggle run**: locked W80–91 **ROC-AUC 0.854 / stability 0.684** (12 test weeks), zero val→test drop; see [docs/REAL_RUN.md](docs/REAL_RUN.md) for the verbatim run
 - [x] M2 — train.py: LogReg/MLP/XGB/Monotone-LGBM (Optuna) + isotonic calibration (val ECE 0.0132→0.0103 on real data) + MLflow tracking & registry (`PrismRiskChampion` v1)
 - [x] M3 — MAPIE SplitConformalClassifier grey-zone triage (AUTO_APPROVE/GREY_ZONE_REVIEW/AUTO_DENY); coverage 0.900/0.901 on the synthetic fixture; real-data profit eval pending
-- [x] M4 — SHAP adverse-action reasons + DiCE feasibility-constrained counterfactual recourse (immutable features locked, ratios recomputed inside the model wrapper; demand-side only) + zero-hallucination notice guard (numeric verifier + deterministic fallback)
+- [x] M4 — SHAP adverse-action reasons + DiCE feasibility-constrained counterfactual recourse (immutable features locked, ratios recomputed inside the model wrapper; demand-side only) + zero-hallucination notice guard (numeric verifier + deterministic fallback); CFs are flip-validated against the served (isotonic-calibrated) decision boundary — non-flipping CFs are rejected
 - [x] M5 — weekly PSI drift (train-locked 10-bin quantile bins frozen on W0–59) with green/warning/retrain bands + self-contained HTML report (evidently dropped — unimportable under pandas 3.x); verified on the synthetic fixture; real-data rerun is user-side (see [docs/REAL_RUN.md](docs/REAL_RUN.md)). Notebook 02 executed 2026-11-09 (synthetic fixture, 0 errors) — see below
 - [x] M6 — FastAPI (`/health` `/predict` `/recourse` `/drift`, measured latency in every response) + Streamlit dashboard (test-week borrowers, SHAP reasons, recourse letter, PSI chart) + Dockerfile/compose (api + dashboard + mlflow, non-root, 3.12-slim) + Locust benchmark + CI lint scope extended. Measured (demo model, dev box): 10 u p50 30 ms · p95 56 ms · ~148 RPS; 100 u (single worker, saturated) p50 500 ms · p95 640 ms · ~168 RPS, 0 fails. Docker build not run in this sandbox (no container runtime) — user-side verify: `docker compose up --build`
-- [ ] M7 — HF Space live demo · Notebook 01 (EDA) still pending
+- [ ] M7 — HF Space live demo (deploy guide: [docs/HF_SPACE.md](docs/HF_SPACE.md)) · Notebook 01 (EDA) still pending
 
 ## Notebook 02 — benchmark · calibration · XAI (executed 2026-11-09, synthetic fixture)
 
 `notebooks/02_benchmark_calibration_xai.ipynb` executed end-to-end (0 errors). All numbers on the **synthetic smoke fixture** — honest process proof, never a public score. Headlines: overall best val ROC-AUC `logreg_baseline` 0.8930; tree reference champion `lightgbm_monotone` 0.8669 (SHAP/DiCE need a tree) — reported side by side, never fudged; locked-week stability 0.7385; conformal 3-way policy **lost** to the binary cutoff by $1.77M on this distribution (reported as-is); DiCE counterfactuals are flip-validated against the served (isotonic-calibrated) decision boundary — a CF that does not change the decision is rejected, never shown as feasible. Figures: [`weekly_gini`](reports/figures/weekly_gini.png) · [`reliability`](reports/figures/reliability.png) · [`conformal_profit`](reports/figures/conformal_profit.png) · [`shap_waterfall`](reports/figures/shap_waterfall.png) · [`psi_weekly`](reports/figures/psi_weekly.png)
 
-## Quickstart
+## Quickstart & full demo
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q                       # 49 tests, synthetic data — no Kaggle download needed
 python scripts/make_synthetic.py --rows 2000   # synthetic smoke stand-in
-```
-
-## Run the demo (API + dashboard)
-
-```bash
-uvicorn api.main:app --host 127.0.0.1 --port 8000   # no champion bundle? falls back to a tiny
-                                                     # LightGBM trained on the synthetic fixture at startup
+uvicorn api.main:app --host 127.0.0.1 --port 8000   # no champion bundle? tiny LightGBM on the
+                                                     # fixture trains at startup (demo mode)
 streamlit run dashboard/app.py                        # http://localhost:8501
 python -m prismrisk.drift --features data/processed/features.parquet --bundle models/real_champion.joblib  # drift report (gitignored)
 locust -f tests/locustfile.py --headless -u 100 -r 20 -t 60s --host http://127.0.0.1:8000
