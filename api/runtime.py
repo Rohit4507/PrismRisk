@@ -231,15 +231,13 @@ class Scorer:
                 "imputed_features": [],
             }, pd_cal, decision
         bg = self.background.sample(min(bg_rows, len(self.background)), random_state=self.cfg.random_seed)
+        # DiCE flips "opposite of the served decision rule" — pass the isotonic calibrator so its
+        # boundary (calibrated PD >= 0.5) matches the conformal BundleClassifier boundary exactly.
         result = ER.recourse(self.model, bg.reset_index(drop=True), X_row, total_cfs=total_cfs,
-                             bg_rows=len(bg), seed=self.cfg.random_seed)
-        # attach post-action PD (measured, not fabricated)
+                             bg_rows=len(bg), seed=self.cfg.random_seed, calibrator=self.isotonic)
+        # attach post-action PD measured on the SAME imputed basis + calibrated ratio-aware wrapper
         for cf in result["counterfactuals"]:
-            cf_row = X_row.iloc[0].to_dict()
-            for col, delta in cf["changes"].items():
-                cf_row[col] = delta["to"]
-            X_cf = pd.DataFrame([cf_row], columns=self.encoder.feature_names).to_numpy().astype(np.float32)
-            cf["new_pd"] = round(self._calibrated(X_cf), 4)
+            cf["new_pd"] = round(float(cf.pop("wrapper_pd", 1.0)), 4)
         return result, pd_cal, decision
 
 

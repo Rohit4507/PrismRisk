@@ -113,10 +113,17 @@ class RatioAwareClassifier(BaseEstimator, ClassifierMixin):
     total_overdue_amt updates credamount_to_income / annuity_to_income /
     overdue_to_credamount automatically. Pre-fitted; fit() is a no-op for sklearn
     compatibility with dice-ml's sklearn backend.
+
+    Pass `calibrator` (an isotonic/1-D regressor fitted on calib weeks, mapping raw
+    positive-class probability -> calibrated PD) so DiCE's notion of "opposite class"
+    matches the *served* decision rule (calibrated PD >= 0.5 => predict class 1) —
+    without it, a raw<0.5-but-calibrated-high applicant is "opposite-flipped" toward
+    higher risk, which is nonsense demand-side.
     """
 
-    def __init__(self, base):
+    def __init__(self, base, calibrator=None):
         self.base = base
+        self.calibrator = calibrator
         self.classes_ = np.array([0, 1])
 
     def fit(self, X, y=None):
@@ -138,7 +145,11 @@ class RatioAwareClassifier(BaseEstimator, ClassifierMixin):
         return X
 
     def predict_proba(self, X):
-        return self.base.predict_proba(self._consistent(X))
+        raw = self.base.predict_proba(self._consistent(X))
+        if self.calibrator is None:
+            return raw
+        cal = np.clip(self.calibrator.predict(raw[:, 1]), 0.0, 1.0)
+        return np.column_stack([1.0 - cal, cal])
 
     def predict(self, X):
         return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
@@ -150,7 +161,7 @@ def _is_actionable(col: str, series: pd.Series) -> bool:
     return bool(pd.api.types.is_numeric_dtype(series) and series.notna().mean() >= 0.5)
 
 
-def build_dice(model, X_train: pd.DataFrame, outcome_name: str = "target"):
+def build_dice(model, X_train: pd.DataFrame, outcome_name: str = "target", calibrator=None):
     """DiCE genetic explainer over a numeric background sample (caller subsamples)."""
     import dice_ml  # noqa: PLC0415 - lazy: heavy import, only when DiCE is actually invoked
 
@@ -161,7 +172,7 @@ def build_dice(model, X_train: pd.DataFrame, outcome_name: str = "target"):
     data = dice_ml.Data(dataframe=frame,
                         continuous_features=[c for c in frame.columns if c != outcome_name],
                         outcome_name=outcome_name)
-    dmodel = dice_ml.Model(model=RatioAwareClassifier(model), backend="sklearn")
+    dmodel = dice_ml.Model(model=RatioAwareClassifier(model, calibrator), backend="sklearn")
     return dice_ml.Dice(data, dmodel, method="genetic")
 
 
@@ -234,7 +245,8 @@ def _extract_cfs(cf_df, vary, scale, q0, imm):
 
 def recourse(model, X_train: pd.DataFrame, query, *, immutable: list[str] | None = None,
              features_to_vary: list[str] | None = None, permitted_range: dict | None = None,
-             total_cfs: int = 4, bg_rows: int = 2000, max_vary: int = 8, seed: int = 42) -> dict:
+             total_cfs: int = 4, bg_rows: int = 2000, max_vary: int = 8, seed: int = 42,
+             calibrator=None) -> dict:
     """Top actionable counterfactuals that flip the applicant to the opposite class.
 
     JSON-serialisable dict. Never fabricates: if DiCE finds nothing inside the
@@ -281,7 +293,7 @@ def recourse(model, X_train: pd.DataFrame, query, *, immutable: list[str] | None
 
     try:
         np.random.seed(seed)  # dice-ml's genetic search has no explicit seed param
-        dice = build_dice(model, bg, outcome_name="target")
+        dice = build_dice(model, bg, outcome_name="target", calibrator=calibrator)
         cf_obj = dice.generate_counterfactuals(
             q, total_CFs=total_cfs, desired_class="opposite",
             features_to_vary=vary, permitted_range=pr,
@@ -297,14 +309,43 @@ def recourse(model, X_train: pd.DataFrame, query, *, immutable: list[str] | None
     scale = {c: float(np.nanmedian(np.abs(bg[c].to_numpy(dtype=np.float64)))) + 1e-6 for c in vary}
     out_cfs = _extract_cfs(cf_df, vary, scale, q.iloc[0], imm)
 
+    # attach the SAME pd the DiCE search was flipping against: the ratio-aware wrapper
+    # evaluated on the IMPUTED row (DiCE refuses NaN). Callers must never rescore on the
+    # unimputed row / raw model — that silently inverts the CF's effect.
+    # Class-flip validity gate: a "feasible" CF must actually flip the wrapper-predicted class of the
+    # imputed query under the SAME model/calibration the DiCE search used. DiCE's genetic search does
+    # not guarantee a flip inside declared bounds, so without this gate we could report feasible=True
+    # for an action plan that changes nothing about the decision.
+    base_pd = None
+    if out_cfs:
+        wrapper = RatioAwareClassifier(model, calibrator)
+        base_pd = float(wrapper.predict_proba(q.astype(np.float64))[:, 1][0])
+        base_cls = int(base_pd >= 0.5)
+        base_row = q.iloc[0].to_dict()
+        valid = []
+        for cf in out_cfs:
+            row_after = dict(base_row)
+            for col, delta in cf["changes"].items():
+                row_after[col] = delta["to"]
+            q_cf = pd.DataFrame([row_after], columns=list(q.columns)).astype(np.float64)
+            # calibrated when a calibrator was passed — exactly the probabilities DiCE flipped against
+            cf["wrapper_pd"] = float(wrapper.predict_proba(q_cf)[:, 1][0])
+            if int(cf["wrapper_pd"] >= 0.5) != base_cls:
+                valid.append(cf)
+        out_cfs = valid
+
     return {
         "feasible": bool(out_cfs),
+        "base_wrapper_pd": (round(base_pd, 4) if base_pd is not None else None),
         "top_reasons": reasons,
         "counterfactuals": out_cfs[:2],
         "immutable_locked": list(imm),
         "features_varied": vary,
         "imputed_features": imputed,
-        "note": None if out_cfs else "counterfactuals violate immutability constraints and were discarded",
+        "note": None if out_cfs else (
+            "no counterfactual inside the permitted bounds flips the served-model "
+            "decision; the applicant is not actionably recourseable on these features"
+        ),
     }
 
 

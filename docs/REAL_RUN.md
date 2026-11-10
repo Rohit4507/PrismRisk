@@ -64,6 +64,18 @@ MLflow: experiment `PrismRisk-Stability`, registered **`PrismRiskChampion` v1**.
   median-imputes query+background for the DiCE search only and reports the filled
   columns as `imputed_features`. Timing on the demo (34 features, 200-row background):
   single counterfactual ≈0.2 s.
+  Post-M6 (Notebook 02) two more correctness fixes landed — both matter for any real-data rerun:
+  (1) DiCE must be flipped against the **isotonic-calibrated** ratio-aware wrapper, not the raw
+  model — otherwise "opposite class" means raw score < 0.5, which for a calibrated-0.64-PD applicant
+  targets the wrong side and returned CFs that scored *higher* risk after the action (97.6% vs
+  64.0% before). `recourse()` now accepts `calibrator=` and the runtime passes the bundle isotonic;
+  the API and notebook consume the attached `wrapper_pd` (calibrated, same imputed basis) instead of
+  rescoring on the raw unimputed row.
+  (2) DiCE's genetic search never guaranteed a class flip; `recourse()` now **rejects** any returned
+  CF that does not actually flip the wrapper-predicted class (`feasible=False` + honest note), and
+  the deterministic adverse-action template was reworded to never promise approval ("One action
+  associated with a lower model-estimated risk is …"). On the synthetic fixture the demo applicant's
+  CF now flips 64.0% → 1.2% under the calibrated wrapper and passes the flip gate.
 - Serving (M6) has **not** been exercised against the real champion bundle either
   (no artifact in the dev sandbox) — endpoints are demo-verified; real-bundle smoke:
   set `PRISMRISK_BUNDLE=models/real_champion.joblib` (+ `PRISMRISK_TRIAGE`,
